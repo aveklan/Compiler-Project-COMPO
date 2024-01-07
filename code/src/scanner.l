@@ -90,11 +90,13 @@ h6 "######"[[:blank:]]*
 italic "*"
 underline "__"
 strikethrough "~~"
+bold_italic "***"
 quote ">"
 escapable_char "\\"
 list_item "[[:blank:]]*\\*"
 link "(\<.+\>)|(\[.+\]\(.+\))"
 image "\!\[.+\]\(.+\)"
+url "\<.+\>"
 hr "---"\n
 inline_code \`
 block_code "\`\`\`"
@@ -111,6 +113,10 @@ lparen "("
 rparen ")"
 lbracket "["
 rbracket "]"
+star "*"
+less_than "<"
+greater_than ">"
+
 blank_line [[:blank:]]*{newline}[[:blank:]]*{newline}
 
 xsvg_begin "\`\`\`xsvg:"
@@ -120,7 +126,7 @@ xsvg_text "text"
 xsvg_attribute (([a-z]+)|("#"[0-9a-fA-F]{6}))|\"([^\"]*)\"
 xsvg_end "\`\`\`"
 
-%x TEXT_MODE UNDERLINE_MODE STRIKETHROUGH_MODE ITALIC_MODE BLOCK_CODE_MODE INLINE_CODE_MODE BOLD_MODE IMAGE_MODE LINK_MODE
+%x TEXT_MODE UNDERLINE_MODE STRIKETHROUGH_MODE ITALIC_MODE BLOCK_CODE_MODE INLINE_CODE_MODE BOLD_MODE IMAGE_MODE LINK_MODE LIST_MODE BOLD_ITALIC_MODE LIST_ITEM URL_MODE
 %x SVG_MODE  SVG_COORD_MODE
 %%
 
@@ -169,6 +175,25 @@ xsvg_end "\`\`\`"
 	return HR;
 }
 
+<INITIAL>{bold_italic} {
+    BEGIN_MODE(BOLD_ITALIC_MODE);
+    print_token("BOLD ITALIC");
+    return BOLD_ITALIC;
+};
+
+<BOLD_ITALIC_MODE>{bold_italic} {
+    END_MODE;
+
+    print_token("BOLD ITALIC");
+    return BOLD_ITALIC;
+};
+
+<INITIAL,BOLD_ITALIC_MODE>. {
+    BEGIN_MODE(TEXT_MODE);
+
+    strbufapp(*yytext);
+};
+
 <INITIAL>{italic} {
     BEGIN_MODE(ITALIC_MODE);
     print_token("ITALIC");
@@ -203,6 +228,31 @@ xsvg_end "\`\`\`"
 };
 
 <INITIAL,BOLD_MODE>. {
+    BEGIN_MODE(TEXT_MODE);
+
+    // yytext is containing the text captured by the regular
+    // expression.
+    // The expression "*yytext" is to catch only one character (the first one).
+    // We will append our character in a global string
+    strbufapp(*yytext);
+};
+
+
+<INITIAL>{less_than} {}	{
+    BEGIN_MODE(URL_MODE); // You can switch to another mode
+
+    print_token("URL");
+    return URL;
+};
+
+<URL_MODE>{greater_than} {
+    END_MODE; // It will go back to the previous mode
+
+    print_token("URL");
+    return URL_MODE;
+};
+
+<INITIAL,URL_MODE>. {
     BEGIN_MODE(TEXT_MODE);
 
     // yytext is containing the text captured by the regular
@@ -301,6 +351,11 @@ xsvg_end "\`\`\`"
     strbufapp(*yytext);
 };
 
+<LIST_MODE>{list_item} {
+    print_token("LIST_ITEM");
+    return LIST_ITEM;
+};
+
 <INITIAL,TEXT_MODE>{exclam}{lbracket} {
     BEGIN_MODE(IMAGE_MODE); // You can switch to another mode
 
@@ -332,6 +387,13 @@ xsvg_end "\`\`\`"
 	return RPAREN;
 };
 
+<INITIAL,TEXT_MODE>{star} {
+    BEGIN_MODE(LIST_MODE); 
+
+    print_token("STAR");
+	return STAR;
+};
+
 <INITIAL,LINK_MODE,IMAGE_MODE>. {
     BEGIN_MODE(TEXT_MODE);
 
@@ -339,7 +401,7 @@ xsvg_end "\`\`\`"
 };
 
 
-<TEXT_MODE>({newline}|{inline_code}|{bold}|^{h1}|^{h2}|^{h3}|^{h4}|^{h5}|^{h6}|{hr}|{italic}|{underline}|{strikethrough}|{list_item}|{link}|{image}|{block_code}|{lparen}|{rparen}|{rbracket}|{lbracket}|{xsvg_begin}|{xsvg_end}|{exclam}{lbracket})(.|\n)* {
+<TEXT_MODE>({newline}|{inline_code}|{bold}|^{h1}|^{h2}|^{h3}|^{h4}|^{h5}|^{h6}|{hr}|{italic}|{underline}|{bold_italic}|{strikethrough}|{list_item}|{link}|{image}|{url}|{block_code}|{lparen}|{rparen}|{rbracket}|{lbracket}|{xsvg_begin}|{xsvg_end}|{exclam}{lbracket})(.|\n)* {
     END_MODE;
 
     // We give the full capture to Flex to be analyzed again

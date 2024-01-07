@@ -24,6 +24,7 @@ const char *tokens[] = {
     "Italic",
     "Underline",
     "Strikethrough",
+    "Bold_Italic",
     "Header1",
     "Header2",
     "Header3",
@@ -36,6 +37,7 @@ const char *tokens[] = {
     "InlineCode",
     "BlockCode",
     "HRule",
+    "URL",
     "SVG"
 };
 
@@ -79,16 +81,17 @@ DOM* dom_root = NULL;
 
 
 %token NEWLINE BLANK_LINE
-%token BOLD ITALIC UNDERLINE STRIKETHROUGH
+%token BOLD ITALIC UNDERLINE STRIKETHROUGH BOLD_ITALIC
 %token H1 H2 H3 H4 H5 H6
 %token <text> TEXT
-%token LPAREN RPAREN LBRACKET RBRACKET EXCLAM_LBRACKET
+%token LPAREN RPAREN LBRACKET RBRACKET EXCLAM_LBRACKET BACKSLASH EXCLAM BACKTICK UNDERSCORE ASTERISK LBRACE RBRACE LESS_THAN GREATER_THAN HASH PLUS MINUS DOT PIPE STAR
 %token QUOTE
 %token BLOCK_CODE INLINE_CODE
 %token HR
+%token URL
 
 %type <dom> document block
-%type <dom_list> block_list paragraph line text
+%type <dom_list> block_list paragraph line text list
 %start document
 
 %%
@@ -115,6 +118,10 @@ text:
         DOM* dom = new_dom(Strikethrough, $2);
         $$ = new_dom_list(dom);
     };
+    | BOLD_ITALIC text BOLD_ITALIC {
+        DOM* dom = new_dom(Bold_Italic, $2);
+        $$ = new_dom_list(dom);
+    };
 	| LBRACKET TEXT RBRACKET LPAREN TEXT RPAREN {
 		DOM* dom = new_dom(Link, NULL);
 		dom->text = $2;
@@ -126,12 +133,32 @@ text:
 		dom->text = $2;
 		dom->url = $5;
 		$$ = new_dom_list(dom);
-	}
+	};
+    | LESS_THAN TEXT GREATER_THAN {
+		DOM* dom = new_dom(URL, NULL);
+		dom->url = $2;
+		$$ = new_dom_list(dom);
+	};
 	| INLINE_CODE TEXT INLINE_CODE {
 		DOM* dom = new_dom(InlineCode, NULL);
 		dom->text = $2;
 		$$ = new_dom_list(dom);
 	}
+list:
+    STAR TEXT NEWLINE list {
+        DOM* item = new_dom(ListItem, $2);
+        $$ = new_dom_list(item);
+
+        if ($4 == NULL) {
+            $$->next = NULL;
+        } else {
+            $$->next = $4;
+        }
+    }
+    | STAR TEXT NEWLINE {
+        DOM* item = new_dom(ListItem, $2);
+        $$ = new_dom_list(item);
+    }
 line:
     text line {
         $$ = $1;
